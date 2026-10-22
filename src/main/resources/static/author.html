@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>作者主页 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="author">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <div class="row" style="margin-bottom:12px">
+        <a class="btn btn-sm" href="/plaza.html">← 返回公开笔记广场</a>
+        <a class="btn btn-sm" href="/hot-authors.html">热门作者</a>
+    </div>
+
+    <div id="author"></div>
+
+    <h2 class="section-title">TA 的公开笔记</h2>
+    <div id="list"></div>
+    <div class="pager" id="pager"></div>
+
+    <div class="card" style="margin-top:18px">
+        <div id="followers"></div>
+        <div id="following" style="margin-top:16px"></div>
+    </div>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/social.js"></script>
+<script src="/js/page-author.js"></script>
+</body>
+</html>

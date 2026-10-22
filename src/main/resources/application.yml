@@ -1,0 +1,83 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: note-workshop
+
+  # ---------- 数据源 ----------
+  # 账号密码支持环境变量覆盖：生产/答辩机器上设 DB_USERNAME / DB_PASSWORD 即可，不用改代码
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/note_workshop?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
+
+  # ---------- 上传限制 ----------
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 20MB
+
+mybatis-plus:
+  configuration:
+    # 数据库下划线字段 -> Java 驼峰属性，如 avatar_url -> avatarUrl
+    map-underscore-to-camel-case: true
+    # 枚举按名字存取：数据库存 'USER' / 'ADMIN'，与 Role 枚举对应
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+  global-config:
+    banner: false
+
+# ---------- 接口文档（Swagger UI）----------
+# 前端入口：http://localhost:8080/swagger-ui.html
+# OpenAPI JSON：http://localhost:8080/v3/api-docs
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+    display-request-duration: true
+  api-docs:
+    path: /v3/api-docs
+
+# ---------- 项目自定义配置 ----------
+app:
+  jwt:
+    # JWT 签名密钥，生产环境用环境变量 JWT_SECRET 覆盖；HS256 要求至少 32 个字符
+    secret: ${JWT_SECRET:note-workshop-dev-secret-key-change-me-in-production-2026}
+    # 令牌有效期（分钟），默认 24 小时
+    expire-minutes: 1440
+  upload:
+    # 上传根目录：相对路径，不写死绝对路径，换机器可直接运行
+    dir: ./uploads
+    # 图片访问 URL 前缀，与静态资源映射保持一致
+    url-prefix: /uploads
+    # 单张图片大小上限
+    max-image-size: 5MB
+  ai:
+    # 是否用"模拟实现"：true 时不真正调用 DeepSeek（离线测试/无 key 演示用）
+    mock: ${AI_MOCK:false}
+    # DeepSeek API Key：只从环境变量读取，绝不写进代码或提交到仓库
+    api-key: ${DEEPSEEK_API_KEY:}
+    # 接口地址（OpenAI 兼容），默认官方地址
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    # 模型名：官方当前推荐 deepseek-flash
+    model: ${AI_MODEL:deepseek-flash}
+    # 单次调用超时（秒）
+    timeout-seconds: 30
+    # 送入模型的正文最大字数（超出截断，控制成本）
+    max-input-chars: 4000
+    # 每人每天的调用配额
+    daily-quota: 20
+    # 单次生成的最大输出 token
+    max-output-tokens: 800
+    # AI 客服：每人每天可发多少条用户消息（独立配额，不与笔记 AI 的 daily-quota 共享）
+    chat-quota: 100
+    # AI 客服：滑动窗口轮数（1 轮 = 用户消息 + AI 回复），只带最近 N 轮上下文
+    chat-window-turns: 10
+    # AI 客服：会话详情一次返回最近多少条消息
+    chat-history-limit: 50
+    # AI 客服：单条用户消息最大字符数
+    chat-max-chars: 1000
+    # AI 客服：每人每天最多新建多少个会话（防止空会话被无限刷；删掉的也计入当天数量）
+    chat-daily-session-limit: 100

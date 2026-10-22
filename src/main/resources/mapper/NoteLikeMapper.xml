@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.notework.mapper.NoteLikeMapper">
+
+    <!--
+      我点赞过的笔记，按点赞时间倒序；点赞数同样实时聚合。
+      必须带上"公开且已通过审核"的过滤：否则笔记被下架、被驳回或作者改成私有之后，
+      点过赞的人仍然能通过这个接口读到它的正文，等于绕过了可见性控制。
+    -->
+    <select id="selectLikedNoteList" resultType="com.notework.mapper.row.NoteWithLikeRow">
+        SELECT n.id,
+               n.user_id,
+               n.book_name,
+               n.content,
+               n.visibility,
+               n.create_time,
+               n.update_time,
+               (SELECT COUNT(*) FROM t_note_like x WHERE x.note_id = n.id) AS like_count
+        FROM t_note_like l
+                 INNER JOIN t_note n ON n.id = l.note_id
+        WHERE l.user_id = #{userId}
+          AND n.visibility = 'PUBLIC'
+          AND n.audit_status = 'APPROVED'
+        ORDER BY l.create_time DESC, l.id DESC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!--
+      总数必须与上面的列表口径完全一致（同样的连接 + 同样的过滤条件），
+      否则会出现"总数大于列表条数"，分页上表现为多出一页空白。
+    -->
+    <select id="countLikedNotes" resultType="long">
+        SELECT COUNT(*)
+        FROM t_note_like l
+                 INNER JOIN t_note n ON n.id = l.note_id
+        WHERE l.user_id = #{userId}
+          AND n.visibility = 'PUBLIC'
+          AND n.audit_status = 'APPROVED'
+    </select>
+</mapper>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.notework.mapper.FollowMapper">
+
+    <!--
+      热门作者排行：粉丝数降序。
+      粉丝数相同时按 user_id 升序兜底，否则同一粉丝数的作者在不同页之间顺序可能不稳定。
+      笔记数只统计"公开且已通过审核"的，与前台展示口径保持一致。
+    -->
+    <select id="selectHotAuthors" resultType="com.notework.mapper.row.HotAuthorRow">
+        SELECT f.followee_id                                                 AS user_id,
+               COUNT(*)                                                      AS follower_count,
+               (SELECT COUNT(*)
+                FROM t_note n
+                WHERE n.user_id = f.followee_id
+                  AND n.visibility = 'PUBLIC'
+                  AND n.audit_status = 'APPROVED')                           AS note_count
+        FROM t_follow f
+        GROUP BY f.followee_id
+        ORDER BY follower_count DESC, f.followee_id ASC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- 有粉丝的作者总数，与上面的列表口径一致 -->
+    <select id="countHotAuthors" resultType="long">
+        SELECT COUNT(DISTINCT followee_id)
+        FROM t_follow
+    </select>
+</mapper>

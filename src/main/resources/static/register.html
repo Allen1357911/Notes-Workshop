@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>注册 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="register">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <div class="card form-narrow" style="margin:0 auto">
+        <h1 class="card-title">注册</h1>
+        <form id="register-form">
+            <div class="form-item">
+                <label for="username">用户名 <span style="color:#dc2626">*</span></label>
+                <input type="text" id="username" pattern="[A-Za-z0-9_]{4,20}" autocomplete="username" required>
+                <div class="form-tip">4~20 位字母、数字或下划线。</div>
+            </div>
+            <div class="form-item">
+                <label for="nickname">昵称（可选）</label>
+                <input type="text" id="nickname" maxlength="20">
+                <div class="form-tip">不填则默认与用户名相同。</div>
+            </div>
+            <div class="form-item">
+                <label for="password">密码 <span style="color:#dc2626">*</span></label>
+                <input type="password" id="password" minlength="6" maxlength="20" autocomplete="new-password" required>
+                <div class="form-tip">6~20 位，会以 BCrypt 哈希保存，数据库里不存明文。</div>
+            </div>
+            <div class="form-item">
+                <label for="confirmPassword">确认密码 <span style="color:#dc2626">*</span></label>
+                <input type="password" id="confirmPassword" minlength="6" maxlength="20" autocomplete="new-password" required>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" id="submit-btn">注册并登录</button>
+                <a class="btn" href="/login.html">已有账号？去登录</a>
+            </div>
+        </form>
+    </div>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/page-auth.js"></script>
+</body>
+</html>

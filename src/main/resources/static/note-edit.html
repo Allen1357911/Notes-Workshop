@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>写笔记 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="my">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <h1 class="page-title" id="form-title">写笔记</h1>
+    <p class="page-desc">笔记必须指定一本图书名，并且要以书名号开头（例如《活着》，也可以写《老人与海》读后感）；正文由你自己写，AI 只提供辅助参考，不会替你写。</p>
+
+    <form id="note-form" class="card">
+        <div class="form-item">
+            <label for="bookName">图书名 <span style="color:#dc2626">*</span></label>
+            <input type="text" id="bookName" maxlength="100" placeholder="例如：《活着》" required>
+            <div class="form-tip">必须以书名号开头，最长 100 个字符；不建图书表，直接存书名。</div>
+        </div>
+
+        <div class="form-item">
+            <label for="content">笔记正文 <span style="color:#dc2626">*</span></label>
+            <textarea id="content" maxlength="20000" placeholder="写下你自己的理解、疑问和联想……" required></textarea>
+            <div class="form-tip">最长 20000 个字符。摘抄之外，记得写下自己的思考。</div>
+        </div>
+
+        <div class="form-item">
+            <label for="visibility">可见性 <span style="color:#dc2626">*</span></label>
+            <select id="visibility">
+                <option value="PRIVATE">私有 —— 只有我自己和管理员能看到</option>
+                <option value="PUBLIC">公开 —— 所有同学都能看到，可以被点赞</option>
+            </select>
+        </div>
+
+        <div class="form-item">
+            <label for="image-input">配图（可选，最多 9 张，单张不超过 5MB）</label>
+            <input type="file" id="image-input" accept="image/png,image/jpeg,image/gif,image/webp" multiple>
+            <div class="form-tip">支持 jpg / jpeg / png / gif / webp，可上传书页截图、手写笔记照片。选择后会自动上传。</div>
+            <div class="upload-list" id="thumbs"></div>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit" id="submit-btn">保存</button>
+            <a class="btn" href="/note-my.html">取消</a>
+        </div>
+        <div class="form-tip" id="form-tip" style="margin-top:10px"></div>
+    </form>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/page-note-edit.js"></script>
+</body>
+</html>

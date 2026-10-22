@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>点赞排行 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="rank" data-list-mode="rank">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <h1 class="page-title">点赞排行</h1>
+    <p class="page-desc">按点赞数从多到少排列（点赞数相同时，较新的笔记排在前面）。只统计公开笔记。</p>
+    <div id="list"></div>
+    <div class="pager" id="pager"></div>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/page-note-list.js"></script>
+</body>
+</html>

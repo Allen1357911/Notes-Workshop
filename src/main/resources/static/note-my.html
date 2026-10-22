@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>我的笔记 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="my" data-list-mode="my">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <div class="row-between">
+        <div>
+            <h1 class="page-title">我的笔记</h1>
+            <p class="page-desc">这里包含你的全部笔记，私有的只有你自己和管理员能看到。</p>
+        </div>
+        <a class="btn btn-primary" href="/note-edit.html">+ 写笔记</a>
+    </div>
+    <div id="list"></div>
+    <div class="pager" id="pager"></div>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/page-note-list.js"></script>
+</body>
+</html>

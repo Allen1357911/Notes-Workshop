@@ -1,0 +1,11 @@
+target/
+.mvnrepo/
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 本地上传的图片（不提交仓库）
+uploads/

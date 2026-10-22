@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI 客服 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="chat">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <h1 class="page-title">AI 客服</h1>
+    <p class="page-desc">
+        可以问平台怎么用：怎么发布/公开笔记、审核规则、AI 辅助怎么用、账号问题等。
+        支持多轮追问（每次会带最近 10 轮上下文）；每位同学每天有提问次数限制。
+    </p>
+
+    <div class="chat-layout">
+        <aside class="chat-side">
+            <button class="btn btn-primary btn-block" id="new-session">+ 新建会话</button>
+            <div id="session-list" class="chat-sessions"></div>
+        </aside>
+
+        <section class="chat-main">
+            <div class="chat-head" id="chat-head">请选择左侧会话，或新建一个</div>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input">
+                <textarea id="chat-text" rows="3" placeholder="输入你的问题（最多 1000 字），按 Ctrl+Enter 发送"></textarea>
+                <div class="chat-send">
+                    <span class="muted" id="chat-hint"></span>
+                    <button class="btn btn-primary" id="send-btn">发送</button>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/page-chat.js"></script>
+</body>
+</html>

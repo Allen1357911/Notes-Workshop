@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="login">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <div class="card form-narrow" style="margin:0 auto">
+        <h1 class="card-title">登录</h1>
+        <form id="login-form">
+            <div class="form-item">
+                <label for="username">用户名</label>
+                <input type="text" id="username" autocomplete="username" required>
+            </div>
+            <div class="form-item">
+                <label for="password">密码</label>
+                <input type="password" id="password" autocomplete="current-password" required>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit" id="submit-btn">登录</button>
+                <a class="btn" href="/register.html">没有账号？去注册</a>
+            </div>
+        </form>
+        <p class="muted" style="margin-top:14px">
+            提示：登录成功后会把令牌保存在浏览器本地，之后的请求会自动带上它；
+            未登录也可以浏览公开笔记、详情与排行。
+        </p>
+    </div>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/page-auth.js"></script>
+</body>
+</html>

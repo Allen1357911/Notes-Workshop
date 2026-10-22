@@ -1,0 +1,2056 @@
+{
+  "info": {
+    "name": "笔记工坊 Note-Workshop 接口测试",
+    "description": "面向在校学生的读书笔记系统的接口测试集合：基础功能（用户 / 读书笔记 / 点赞）+ 扩展部分（管理员后台、笔记审核与重提、社区互动：关注与评论）。\n\n使用步骤：\n1. 先启动应用（默认 http://localhost:8080，可在集合变量 baseUrl 里改）。\n2. 直接点 Runner 运行整个集合即可；注册请求会自动生成随机用户名，因此集合可以反复运行。\n3. 登录请求会自动把返回的 token 写入集合变量，之后的请求会自动带上它。\n4. 「上传头像」「上传笔记配图」两个请求需要手动选择一个本地图片文件。\n5. 第七组「管理员后台」需要先把 postman_admin 这个账号在数据库里提权（UPDATE t_user SET role='ADMIN' WHERE username='postman_admin'），再运行该组的登录请求。\n6. 第八组「社区互动」里的 authorId / noteId 需要填成实际存在的笔记与作者 id。\n7. 每个请求都带断言脚本，校验 HTTP 状态码与业务 code。\n8. 第九组「AI 辅助」需要应用配置 DEEPSEEK_API_KEY；若暂无 key，可用 mock 模式启动（java -jar target\\note-workshop-1.0.0.jar --app.ai.mock=true），结果结构一致且不花 token。生成与保存是两个接口，aiLogId 由生成请求自动写入集合变量。\n9. 第十组「AI 智能客服」同样需要 Key 或用 mock 模式启动；chatSessionId 由「新建会话」自动写入，按顺序跑（新建 → 列表 → 详情 → 发送 → 删除）即可。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "username", "value": "postman_user" },
+    { "key": "password", "value": "123456" },
+    { "key": "newPassword", "value": "654321" },
+    { "key": "noteId", "value": "" },
+    { "key": "privateNoteId", "value": "" },
+    { "key": "imageUrl", "value": "" },
+    { "key": "adminUsername", "value": "postman_admin" },
+    { "key": "adminPassword", "value": "123456" },
+    { "key": "adminToken", "value": "" },
+    { "key": "adminUserId", "value": "" },
+    { "key": "targetUserId", "value": "" },
+    { "key": "authorId", "value": "" },
+    { "key": "commentId", "value": "" },
+    { "key": "aiLogId", "value": "" },
+    { "key": "chatSessionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "一、认证接口",
+      "item": [
+        {
+          "name": "注册（自动使用随机用户名）",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"username\", \"postman_\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"响应里不含密码字段\", function () {",
+                  "    pm.expect(pm.response.json().data).to.not.have.property(\"password\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json;charset=utf-8" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"nickname\": \"Postman 同学\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "description": "注册新用户。用户名 4~20 位字母数字下划线，密码 6~20 位。"
+          }
+        },
+        {
+          "name": "登录（自动保存 token）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且返回 token\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "    pm.expect(pm.response.json().data.token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set(\"token\", pm.response.json().data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json;charset=utf-8" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "description": "登录成功后返回 JWT 令牌，测试脚本会自动写入集合变量 token。"
+          }
+        },
+        {
+          "name": "登录失败：密码错误（400 / 10003）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400 且业务 code 10003\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql(10003);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json;charset=utf-8" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"wrong-password\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "description": "密码错误与用户不存在返回同一个提示，不暴露用户名是否存在。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "二、用户资料接口",
+      "item": [
+        {
+          "name": "查看我的资料",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"响应里不含密码字段\", function () {",
+                  "    pm.expect(pm.response.json().data).to.not.have.property(\"password\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/users/me", "host": ["{{baseUrl}}"], "path": ["api", "users", "me"] },
+            "description": "需要登录。"
+          }
+        },
+        {
+          "name": "查看我的资料失败：不带令牌（401 / 401）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401 且业务 code 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().code).to.eql(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/users/me", "host": ["{{baseUrl}}"], "path": ["api", "users", "me"] },
+            "description": "未登录访问受保护接口，拦截器直接返回统一格式的 401。"
+          }
+        },
+        {
+          "name": "修改昵称",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且昵称已更新\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.nickname).to.eql(\"改过的昵称\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"nickname\": \"改过的昵称\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/users/me", "host": ["{{baseUrl}}"], "path": ["api", "users", "me"] }
+          }
+        },
+        {
+          "name": "修改密码（成功后自动切换变量）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.collectionVariables.set(\"password\", pm.collectionVariables.get(\"newPassword\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"oldPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/users/me/password", "host": ["{{baseUrl}}"], "path": ["api", "users", "me", "password"] },
+            "description": "必须提供原密码，原密码错误返回 10004。执行成功后集合变量 password 会切换成新密码。"
+          }
+        },
+        {
+          "name": "上传头像（需手动选文件）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且返回头像 URL\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.avatarUrl).to.include(\"/uploads/avatar/\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "test-image.png" }]
+            },
+            "url": { "raw": "{{baseUrl}}/api/users/me/avatar", "host": ["{{baseUrl}}"], "path": ["api", "users", "me", "avatar"] },
+            "description": "multipart/form-data，字段名 file。运行前请手动选择一个 jpg/png 图片；只允许 jpg、jpeg、png、gif、webp，单张不超过 5MB。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "三、文件上传接口",
+      "item": [
+        {
+          "name": "上传笔记配图（自动保存 URL）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且返回配图 URL\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data).to.include(\"/uploads/note/\");",
+                  "});",
+                  "pm.collectionVariables.set(\"imageUrl\", pm.response.json().data);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "test-image.png" }]
+            },
+            "url": { "raw": "{{baseUrl}}/api/files/note-images", "host": ["{{baseUrl}}"], "path": ["api", "files", "note-images"] },
+            "description": "multipart/form-data，字段名 file。返回的 URL 会写入集合变量 imageUrl，供新建笔记时使用。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "四、读书笔记接口",
+      "item": [
+        {
+          "name": "新建公开笔记（自动保存 noteId）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且可见性为 PUBLIC\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.visibility).to.eql(\"PUBLIC\");",
+                  "});",
+                  "pm.collectionVariables.set(\"noteId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookName\": \"《活着》\",\n  \"content\": \"读完之后最大的感受是：活着本身就是意义。\",\n  \"visibility\": \"PUBLIC\",\n  \"imageUrls\": [\"{{imageUrl}}\"]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/notes", "host": ["{{baseUrl}}"], "path": ["api", "notes"] },
+            "description": "图书名与可见性必填。若 imageUrl 为空，可把 imageUrls 改成 []。"
+          }
+        },
+        {
+          "name": "新建私有笔记（自动保存 privateNoteId）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且可见性为 PRIVATE\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.visibility).to.eql(\"PRIVATE\");",
+                  "});",
+                  "pm.collectionVariables.set(\"privateNoteId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookName\": \"《人类简史》\",\n  \"content\": \"私有笔记：只有我自己和管理员能看到。\",\n  \"visibility\": \"PRIVATE\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/notes", "host": ["{{baseUrl}}"], "path": ["api", "notes"] }
+          }
+        },
+        {
+          "name": "新建笔记失败：缺图书名（400 / 400）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400 且提示图书名不能为空\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().message).to.eql(\"图书名不能为空\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"没有图书名\",\n  \"visibility\": \"PUBLIC\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/notes", "host": ["{{baseUrl}}"], "path": ["api", "notes"] }
+          }
+        },
+        {
+          "name": "我的笔记列表（分页）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且分页结构完整\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json().data;",
+                  "    pm.expect(data).to.have.property(\"total\");",
+                  "    pm.expect(data).to.have.property(\"list\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/my?page=1&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", "my"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }]
+            },
+            "description": "返回当前登录用户的全部笔记（含私有）。"
+          }
+        },
+        {
+          "name": "公开笔记列表（无需登录）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且只包含公开笔记\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var list = pm.response.json().data.list;",
+                  "    list.forEach(function (note) { pm.expect(note.visibility).to.eql(\"PUBLIC\"); });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/public?page=1&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", "public"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }]
+            },
+            "description": "匿名可访问，只返回 PUBLIC 的笔记。"
+          }
+        },
+        {
+          "name": "笔记详情（公开笔记，无需登录）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且包含配图与点赞字段\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json().data;",
+                  "    pm.expect(data).to.have.property(\"images\");",
+                  "    pm.expect(data).to.have.property(\"likeCount\");",
+                  "    pm.expect(data).to.have.property(\"liked\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}"] },
+            "description": "返回正文、图书名、全部配图、AI 辅助结果（基础阶段为空）、点赞数与当前用户是否已赞。"
+          }
+        },
+        {
+          "name": "笔记详情失败：匿名看私有笔记（403 / 20004）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403 且业务 code 20004\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().code).to.eql(20004);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/notes/{{privateNoteId}}", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{privateNoteId}}"] },
+            "description": "私有笔记只有作者本人与管理员能看。"
+          }
+        },
+        {
+          "name": "编辑笔记（整体覆盖正文与可见性）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且正文已更新\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.content).to.include(\"改过的正文\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookName\": \"《活着》\",\n  \"content\": \"改过的正文：imageUrls 不传表示不改配图。\",\n  \"visibility\": \"PUBLIC\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}"] },
+            "description": "只有作者本人或管理员能改；imageUrls 不传=不改配图，传空数组=清空。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "五、点赞接口",
+      "item": [
+        {
+          "name": "点赞公开笔记",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且返回最新点赞数\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}/like", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}", "like"] },
+            "description": "返回该笔记最新的点赞数。"
+          }
+        },
+        {
+          "name": "重复点赞（幂等，仍返回 1）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"重复点赞不报错且数量不变\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}/like", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}", "like"] },
+            "description": "同一个人对同一篇笔记只能有一条点赞记录（数据库唯一索引兜底）。"
+          }
+        },
+        {
+          "name": "点赞失败：私有笔记（400 / 20003）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400 且业务 code 20003\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql(20003);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes/{{privateNoteId}}/like", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{privateNoteId}}", "like"] }
+          }
+        },
+        {
+          "name": "我点赞过的笔记（分页）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且列表里有刚点赞的笔记\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.total).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/likes/my?page=1&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "likes", "my"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }]
+            }
+          }
+        },
+        {
+          "name": "按点赞数排行（无需登录）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且按点赞数降序\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var list = pm.response.json().data.list;",
+                  "    for (var i = 1; i < list.length; i++) {",
+                  "        pm.expect(list[i - 1].likeCount).to.be.at.least(list[i].likeCount);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/rank?page=1&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", "rank"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }]
+            },
+            "description": "只统计公开笔记，按点赞数降序、创建时间降序。"
+          }
+        },
+        {
+          "name": "取消点赞",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且点赞数减 1\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}/like", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}", "like"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "六、删除与边界",
+      "item": [
+        {
+          "name": "删除笔记（同时清理配图与点赞记录）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}"] },
+            "description": "只有作者本人或管理员能删。"
+          }
+        },
+        {
+          "name": "删除后查详情（404 / 20001）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404 且业务 code 20001\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().code).to.eql(20001);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}"] }
+          }
+        },
+        {
+          "name": "请求方法不支持（405 / 405）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 405 且业务 code 405\", function () {",
+                  "    pm.response.to.have.status(405);",
+                  "    pm.expect(pm.response.json().code).to.eql(405);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes", "host": ["{{baseUrl}}"], "path": ["api", "notes"] },
+            "description": "新建笔记只支持 POST，用 GET 访问返回 405。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "七、管理员后台（扩展部分）",
+      "item": [
+        {
+          "name": "管理员登录（保存 adminToken）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且返回管理员令牌\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.user.role).to.eql(\"ADMIN\");",
+                  "});",
+                  "pm.collectionVariables.set(\"adminToken\", pm.response.json().data.token);",
+                  "pm.collectionVariables.set(\"adminUserId\", pm.response.json().data.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json;charset=utf-8" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "description": "前置操作：先在数据库里把该账号提权（UPDATE t_user SET role='ADMIN' WHERE username='postman_admin'），再用它登录。"
+          }
+        },
+        {
+          "name": "后台接口：未登录 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401 且 code 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().code).to.eql(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/admin/users?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "后台接口：普通用户 403（需要管理员权限）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403 且提示需要管理员权限\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().message).to.eql(\"需要管理员权限\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "用户列表（分页 + 搜索，不返回密码）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且列表项不含 password\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.response.json().data.list.forEach(function (u) { pm.expect(u).to.not.have.property(\"password\"); });",
+                  "});",
+                  "pm.collectionVariables.set(\"targetUserId\", pm.response.json().data.list[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "不能禁用自己的账号（400 / 10006）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400 且 code 10006\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql(10006);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": 0\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{adminUserId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{adminUserId}}", "status"] }
+          }
+        },
+        {
+          "name": "禁用普通用户",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且状态变为已禁用\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.status).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": 0\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{targetUserId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{targetUserId}}", "status"] },
+            "description": "禁用后该账号立即无法访问受保护接口、也无法重新登录；运行完记得用下一个请求启用回来。"
+          }
+        },
+        {
+          "name": "重新启用账号",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且状态恢复为正常\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.status).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": 1\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{targetUserId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{targetUserId}}", "status"] }
+          }
+        },
+        {
+          "name": "内容管理：全部笔记列表",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且带审核状态\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var list = pm.response.json().data.list;",
+                  "    if (list.length > 0) { pm.expect(list[0]).to.have.property(\"auditStatus\"); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/notes?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "admin", "notes"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "待审核队列（先提交先审）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且都是待审核状态\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.response.json().data.list.forEach(function (n) { pm.expect(n.auditStatus).to.eql(\"PENDING\"); });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/notes/pending?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "admin", "notes", "pending"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "审核通过公开笔记（用 noteId）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且变为已通过\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.auditStatus).to.eql(\"APPROVED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"approved\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/notes/{{noteId}}/audit", "host": ["{{baseUrl}}"], "path": ["api", "admin", "notes", "{{noteId}}", "audit"] },
+            "description": "只有待审核状态能审核，重复审核返回 20005。"
+          }
+        },
+        {
+          "name": "审核驳回公开笔记（带原因）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400（该笔记已不是待审核状态）或 200（驳回成功）\", function () {",
+                  "    pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"approved\": false,\n  \"remark\": \"请补充自己的思考，不要只摘抄原文\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/notes/{{noteId}}/audit", "host": ["{{baseUrl}}"], "path": ["api", "admin", "notes", "{{noteId}}", "audit"] }
+          }
+        },
+        {
+          "name": "下架违规笔记",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 或 400（状态不允许）\", function () {",
+                  "    pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"remark\": \"包含违规内容，先下架\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/notes/{{noteId}}/offline", "host": ["{{baseUrl}}"], "path": ["api", "admin", "notes", "{{noteId}}", "offline"] }
+          }
+        },
+        {
+          "name": "恢复已下架的笔记",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 或 400（不是已下架状态）\", function () {",
+                  "    pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/notes/{{noteId}}/restore", "host": ["{{baseUrl}}"], "path": ["api", "admin", "notes", "{{noteId}}", "restore"] }
+          }
+        },
+        {
+          "name": "违规评论列表",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "var list = pm.response.json().data.list;",
+                  "if (list.length > 0) { pm.collectionVariables.set(\"commentId\", list[0].id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/comments?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "admin", "comments"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] },
+            "description": "评论功能属于「社区互动」模块，该模块完成前这里通常是空列表。"
+          }
+        },
+        {
+          "name": "删除违规评论（逻辑删除并级联子评论）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 或 404（评论不存在）\", function () {",
+                  "    pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "comments", "{{commentId}}"] },
+            "description": "需要先执行上一个请求拿到 commentId；删父评论时会连同子评论一起逻辑删除。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "八、社区互动与重新提交（扩展部分）",
+      "item": [
+        {
+          "name": "重新提交审核（被驳回的笔记）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 或 400（不是已驳回状态）\", function () {",
+                  "    pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"重新提交后变为待审核，且驳回原因已清空\", function () {",
+                  "        pm.expect(pm.response.json().data.auditStatus).to.eql(\"PENDING\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}/resubmit", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}", "resubmit"] },
+            "description": "只有作者本人或管理员可操作；内容不用改也能重提，改了内容也会自动重提。"
+          }
+        },
+        {
+          "name": "关注作者",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200（重复关注也返回成功，幂等）\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/users/{{authorId}}/follow", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{authorId}}", "follow"] },
+            "description": "不能关注自己（50001）；需要先把 authorId 设成别人的用户 id。"
+          }
+        },
+        {
+          "name": "取消关注",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200（没关注过也算成功，幂等）\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/users/{{authorId}}/follow", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{authorId}}", "follow"] }
+          }
+        },
+        {
+          "name": "作者主页信息（可匿名）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且带粉丝数 / 关注数 / 笔记数\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var data = pm.response.json().data;",
+                  "    pm.expect(data).to.have.property(\"followerCount\");",
+                  "    pm.expect(data).to.have.property(\"followingCount\");",
+                  "    pm.expect(data).to.have.property(\"noteCount\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/users/{{authorId}}", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{authorId}}"] }
+          }
+        },
+        {
+          "name": "作者的公开笔记（可匿名）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/users/{{authorId}}/notes?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{authorId}}", "notes"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] },
+            "description": "只返回该作者「公开且已通过审核」的笔记。"
+          }
+        },
+        {
+          "name": "粉丝列表（可匿名）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/users/{{authorId}}/followers?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{authorId}}", "followers"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "关注列表（可匿名）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/users/{{authorId}}/following?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{authorId}}", "following"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "热门作者排行（可匿名）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且按粉丝数排序\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var list = pm.response.json().data.list;",
+                  "    for (var i = 1; i < list.length; i++) {",
+                  "        pm.expect(list[i - 1].followerCount).to.be.at.least(list[i].followerCount);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/authors/hot?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "authors", "hot"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] }
+          }
+        },
+        {
+          "name": "关注流（需要登录）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/feed/following?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "feed", "following"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] },
+            "description": "我关注的人发布的「公开且已通过审核」的笔记，按发布时间倒序。"
+          }
+        },
+        {
+          "name": "发表评论",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且返回评论 id\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data).to.have.property(\"id\");",
+                  "});",
+                  "pm.collectionVariables.set(\"commentId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"这本书我也读过，写得不错\",\n  \"parentId\": null\n}" },
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}/comments", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}", "comments"] },
+            "description": "只能评论「公开且已通过审核」的笔记；parentId 传了就是回复某条评论（支持多级回复）。"
+          }
+        },
+        {
+          "name": "回复评论（多级回复）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且 parentId 正确\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.parentId).to.eql(Number(pm.collectionVariables.get(\"commentId\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json;charset=utf-8" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"谢谢，欢迎继续交流\",\n  \"parentId\": {{commentId}}\n}" },
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}/comments", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}", "comments"] }
+          }
+        },
+        {
+          "name": "评论列表（含多级回复，可匿名）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且顶层评论带 replies 数组\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var list = pm.response.json().data.list;",
+                  "    if (list.length > 0) { pm.expect(list[0]).to.have.property(\"replies\"); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/notes/{{noteId}}/comments?page=1&size=10", "host": ["{{baseUrl}}"], "path": ["api", "notes", "{{noteId}}", "comments"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "10" }] },
+            "description": "顶层评论倒序分页，每条评论的所有回复随它一起返回（前端按层级缩进展示）。"
+          }
+        },
+        {
+          "name": "删除自己的评论（级联子回复）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 或 403（不是自己的评论）\", function () {",
+                  "    pm.expect([200, 403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["api", "comments", "{{commentId}}"] },
+            "description": "逻辑删除：删顶层评论会删掉整棵树；删一条回复只删它自己和它的后代，不动别人的评论。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "九、AI 辅助（AI 功能）",
+      "description": "AI 模块：生成（预览，不保存）→ 确认保存 → 公开开关 → 撤销 → 管理员统计。\n\n两个关键约定：\n1. 生成只写 AI 调用日志（t_ai_log），不会修改笔记；只有「确认保存」才写入笔记，且确认接口只收 aiLogId（结果由服务端取，客户端改不了 AI 的结论）。\n2. 一篇笔记最多保存一种 AI 结果，再保存会覆盖旧的；作者可决定结果是否对其他人公开。\n\n运行前提：应用需配置 DEEPSEEK_API_KEY；或以 mock 模式启动（java -jar ... --app.ai.mock=true），mock 模式不联网、不花 token，结果结构与真实一致。每人每天有调用配额（默认 20 次）。",
+      "item": [
+        {
+          "name": "AI：生成笔记总结（SUMMARY）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"返回 aiLogId、可展示文本与 token 用量\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.aiLogId).to.be.a(\"number\");",
+                  "    pm.expect(d.text).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(d.totalTokens).to.be.above(0);",
+                  "    pm.collectionVariables.set(\"aiLogId\", d.aiLogId);",
+                  "});",
+                  "pm.test(\"带上\\\"仅供参考\\\"提示语\", function () {",
+                  "    pm.expect(pm.response.json().data.disclaimer).to.include(\"仅供参考\");",
+                  "});",
+                  "pm.test(\"结果里包含「摘要」\", function () {",
+                  "    pm.expect(pm.response.json().data.text).to.include(\"摘要\");",
+                  "});",
+                  "pm.test(\"生成不会修改笔记（result 只是预览）\", function () {",
+                  "    pm.expect(pm.response.json().data.remainingQuota).to.be.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/{{noteId}}/ai/SUMMARY",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notes",
+                "{{noteId}}",
+                "ai",
+                "SUMMARY"
+              ]
+            },
+            "description": "生成总结（预览）。返回 aiLogId、排版后的文本、token 用量与今日剩余配额；此时笔记还没有任何变化。"
+          }
+        },
+        {
+          "name": "AI：生成适宜人群（AUDIENCE）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"返回 aiLogId、可展示文本与 token 用量\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.aiLogId).to.be.a(\"number\");",
+                  "    pm.expect(d.text).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(d.totalTokens).to.be.above(0);",
+                  "    pm.collectionVariables.set(\"aiLogId\", d.aiLogId);",
+                  "});",
+                  "pm.test(\"带上\\\"仅供参考\\\"提示语\", function () {",
+                  "    pm.expect(pm.response.json().data.disclaimer).to.include(\"仅供参考\");",
+                  "});",
+                  "pm.test(\"结果里包含「适合」\", function () {",
+                  "    pm.expect(pm.response.json().data.text).to.include(\"适合\");",
+                  "});",
+                  "pm.test(\"生成不会修改笔记（result 只是预览）\", function () {",
+                  "    pm.expect(pm.response.json().data.remainingQuota).to.be.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/{{noteId}}/ai/AUDIENCE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notes",
+                "{{noteId}}",
+                "ai",
+                "AUDIENCE"
+              ]
+            },
+            "description": "判断这篇笔记适合哪些人读，返回 1~5 条带理由的清单。"
+          }
+        },
+        {
+          "name": "AI：生成笔记评分（SCORE）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"返回 aiLogId、可展示文本与 token 用量\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.aiLogId).to.be.a(\"number\");",
+                  "    pm.expect(d.text).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(d.totalTokens).to.be.above(0);",
+                  "    pm.collectionVariables.set(\"aiLogId\", d.aiLogId);",
+                  "});",
+                  "pm.test(\"带上\\\"仅供参考\\\"提示语\", function () {",
+                  "    pm.expect(pm.response.json().data.disclaimer).to.include(\"仅供参考\");",
+                  "});",
+                  "pm.test(\"结果里包含「评分」\", function () {",
+                  "    pm.expect(pm.response.json().data.text).to.include(\"评分\");",
+                  "});",
+                  "pm.test(\"生成不会修改笔记（result 只是预览）\", function () {",
+                  "    pm.expect(pm.response.json().data.remainingQuota).to.be.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/{{noteId}}/ai/SCORE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notes",
+                "{{noteId}}",
+                "ai",
+                "SCORE"
+              ]
+            },
+            "description": "给笔记打分（1~10 的整数）+ 理由 + 一条改进建议。服务端会校验分数范围，越界按解析失败处理。"
+          }
+        },
+        {
+          "name": "AI：确认保存结果（只传 aiLogId，不公开）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"保存后详情里能读到 AI 结果\", function () {",
+                  "    var url = pm.collectionVariables.get(\"baseUrl\") + \"/api/notes/\" + pm.collectionVariables.get(\"noteId\");",
+                  "    pm.sendRequest({ url: url, method: \"GET\", header: { \"Authorization\": \"Bearer \" + pm.collectionVariables.get(\"token\") } },",
+                  "        function (err, res) {",
+                  "            pm.expect(err).to.be.null;",
+                  "            var d = res.json().data;",
+                  "            pm.expect(d.aiType).to.be.a(\"string\").and.not.empty;",
+                  "            pm.expect(d.aiResult).to.be.a(\"string\").and.not.empty;",
+                  "        });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json;charset=utf-8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/{{noteId}}/ai-result",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notes",
+                "{{noteId}}",
+                "ai-result"
+              ]
+            },
+            "description": "用户手动确认后才写入笔记。请求体只传 aiLogId 与 aiPublic，不传结果内容 —— 客户端无法篡改 AI 的结论。再保存会覆盖这篇笔记之前的 AI 结果（一篇只存一种）。",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aiLogId\": {{aiLogId}},\n  \"aiPublic\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "AI：把结果设为公开（作者决定）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"匿名查看时能看到已公开的 AI 结果\", function () {",
+                  "    var url = pm.collectionVariables.get(\"baseUrl\") + \"/api/notes/\" + pm.collectionVariables.get(\"noteId\");",
+                  "    pm.sendRequest({ url: url, method: \"GET\" }, function (err, res) {",
+                  "        pm.expect(err).to.be.null;",
+                  "        pm.expect(res.json().data.aiResult).to.be.a(\"string\").and.not.empty;",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json;charset=utf-8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/{{noteId}}/ai-result/visibility",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notes",
+                "{{noteId}}",
+                "ai-result",
+                "visibility"
+              ]
+            },
+            "description": "作者决定 AI 结果是否对其他人公开。公开的前提是笔记本身公开且已通过审核；关闭后只有作者本人与管理员可见。",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aiPublic\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "AI：撤销已保存的结果",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"撤销后详情里没有 AI 结果\", function () {",
+                  "    var url = pm.collectionVariables.get(\"baseUrl\") + \"/api/notes/\" + pm.collectionVariables.get(\"noteId\");",
+                  "    pm.sendRequest({ url: url, method: \"GET\", header: { \"Authorization\": \"Bearer \" + pm.collectionVariables.get(\"token\") } },",
+                  "        function (err, res) {",
+                  "            pm.expect(err).to.be.null;",
+                  "            pm.expect(res.json().data.aiResult).to.be.oneOf([null, undefined, \"\"]);",
+                  "        });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/{{noteId}}/ai-result",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notes",
+                "{{noteId}}",
+                "ai-result"
+              ]
+            },
+            "description": "清空笔记上的 AI 结果，笔记正文不受影响。"
+          }
+        },
+        {
+          "name": "管理员：AI 调用统计",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"统计字段完整，含按能力与最近 7 天\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.totalCalls).to.be.at.least(0);",
+                  "    pm.expect(d).to.have.property(\"successRate\");",
+                  "    pm.expect(d).to.have.property(\"totalTokens\");",
+                  "    pm.expect(d.byCapability).to.be.an(\"array\");",
+                  "    pm.expect(d.recentDays).to.be.an(\"array\").with.lengthOf(7);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/ai-stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "ai-stats"
+              ]
+            },
+            "description": "总调用次数、成功/失败、成功率、token 总用量、平均与最大耗时、被确认保存次数，以及按能力与最近 7 天的分布。需要管理员令牌 adminToken。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "十、AI 智能客服（AI 进阶功能）",
+      "description": "平台答疑助手：新建会话 → 多轮提问 → 切换/删除会话。\n\n要点：\n1. 会话归属唯一用户，越权访问统一返回 60007（404），不会返回任何内容；\n2. 上下文按会话隔离，每次只带最近 10 轮（20 条消息）；\n3. 单条提问上限 1000 字；每人每天 100 条（独立配额，失败不计数）；\n4. 调用失败不入库、不扣配额，但会计入 AI 统计的失败次数。\n\n运行前提：应用已配置 DEEPSEEK_API_KEY，或以 mock 模式启动（java -jar ... --app.ai.mock=true，不联网不花 token）。",
+      "item": [
+        {
+          "name": "新建会话（保存 chatSessionId）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"标题是新会话、消息数为 0\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.title).to.eql(\"新会话\");",
+                  "    pm.expect(d.messageCount).to.eql(0);",
+                  "    pm.collectionVariables.set(\"chatSessionId\", d.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/chat/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "chat",
+                "sessions"
+              ]
+            },
+            "description": "创建一个空会话：标题为「新会话」、消息数为 0；之后发消息时由首条成功消息取名。"
+          }
+        },
+        {
+          "name": "我的会话列表",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"列表非空且能看到刚建的会话\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.list).to.be.an(\"array\").that.is.not.empty;",
+                  "    var id = pm.collectionVariables.get(\"chatSessionId\");",
+                  "    pm.expect(d.list.some(function (s) { return String(s.id) === String(id); })).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/chat/sessions?page=1&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "chat",
+                "sessions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "只返回当前登录用户的会话，按最后消息时间倒序（空会话按创建时间参与排序）。"
+          }
+        },
+        {
+          "name": "会话详情（最近 50 条消息）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"返回会话头与消息数组\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.session).to.have.property(\"id\");",
+                  "    pm.expect(d.messages).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/chat/sessions/{{chatSessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "chat",
+                "sessions",
+                "{{chatSessionId}}"
+              ]
+            },
+            "description": "返回会话头信息与最近 50 条消息（按时间正序）。不存在或不是自己的返回 60007（404）。"
+          }
+        },
+        {
+          "name": "发送消息（多轮对话）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"拿到用户消息与 AI 回复\", function () {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d.userMessage.content).to.eql(\"笔记可以设成仅自己可见吗？\");",
+                  "    pm.expect(d.reply.content).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(d.reply.role).to.eql(\"ASSISTANT\");",
+                  "    pm.expect(d.reply.totalTokens).to.be.above(0);",
+                  "    pm.expect(d.sessionTitle).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(d.remainingQuota).to.be.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json;charset=utf-8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/chat/sessions/{{chatSessionId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "chat",
+                "sessions",
+                "{{chatSessionId}}",
+                "messages"
+              ]
+            },
+            "description": "带最近 10 轮上下文调用模型并返回回复。单条上限 1000 字；失败返回 60008/60009/60010，且不写对话记录、不扣配额（但计入 AI 统计的失败次数）。",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"笔记可以设成仅自己可见吗？\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "删除会话（消息一并删除）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 且业务 code 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql(200);",
+                  "});",
+                  "pm.test(\"删除后再读返回 404 / 60007\", function () {",
+                  "    var url = pm.collectionVariables.get(\"baseUrl\") + \"/api/ai/chat/sessions/\" + pm.collectionVariables.get(\"chatSessionId\");",
+                  "    pm.sendRequest({ url: url, method: \"GET\", header: { \"Authorization\": \"Bearer \" + pm.collectionVariables.get(\"token\") } },",
+                  "        function (err, res) {",
+                  "            pm.expect(err).to.be.null;",
+                  "            pm.expect(res.code).to.eql(404);",
+                  "            pm.expect(res.json().code).to.eql(60007);",
+                  "        });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/chat/sessions/{{chatSessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "chat",
+                "sessions",
+                "{{chatSessionId}}"
+              ]
+            },
+            "description": "物理删除会话及其全部消息（聊天记录属于用户私有数据，删干净）。删除后再次访问应返回 60007。"
+          }
+        }
+      ]
+    }
+  ]
+}

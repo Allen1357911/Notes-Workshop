@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>管理后台 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="admin">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <h1 class="page-title">管理后台</h1>
+    <p class="page-desc">
+        公开笔记审核、内容下架与恢复、用户禁用与启用、违规评论删除。
+        这一页只有管理员能打开，后端也会对每个接口再校验一次身份。
+    </p>
+    <div id="admin"></div>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/social.js"></script>
+<script src="/js/page-admin.js"></script>
+</body>
+</html>

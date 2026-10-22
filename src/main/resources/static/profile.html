@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>个人资料 - 笔记工坊</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="profile">
+<header id="nav" class="nav"></header>
+
+<main class="container">
+    <h1 class="page-title">个人资料</h1>
+    <p class="page-desc">修改昵称、密码与头像。密码以 BCrypt 哈希存储，任何接口都不会返回密码。</p>
+
+    <div class="card">
+        <h2 class="card-title">账号信息</h2>
+        <div class="row" style="align-items:flex-start;gap:20px">
+            <div style="text-align:center">
+                <img class="avatar-preview" id="avatar-img" alt="头像" style="display:none">
+                <div style="margin-top:8px">
+                    <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" style="font-size:12px">
+                </div>
+                <div class="form-tip">jpg / png / gif / webp，≤ 5MB</div>
+            </div>
+            <div style="flex:1;min-width:240px" id="profile-info">
+                <div class="empty">加载中…</div>
+            </div>
+        </div>
+    </div>
+
+    <form class="card" id="nickname-form">
+        <h2 class="card-title">修改昵称</h2>
+        <div class="form-item form-narrow">
+            <label for="nickname">昵称</label>
+            <input type="text" id="nickname" maxlength="20" required>
+            <div class="form-tip">最长 20 个字符。</div>
+        </div>
+        <button class="btn btn-primary" type="submit" id="nickname-submit">保存昵称</button>
+    </form>
+
+    <form class="card" id="password-form">
+        <h2 class="card-title">修改密码</h2>
+        <div class="form-item form-narrow">
+            <label for="oldPassword">原密码</label>
+            <input type="password" id="oldPassword" autocomplete="current-password" required>
+        </div>
+        <div class="form-item form-narrow">
+            <label for="newPassword">新密码</label>
+            <input type="password" id="newPassword" minlength="6" maxlength="20" autocomplete="new-password" required>
+            <div class="form-tip">长度 6~20 位。修改成功后已签发的旧令牌仍然有效（纯 JWT 无状态）。</div>
+        </div>
+        <button class="btn btn-primary" type="submit" id="password-submit">修改密码</button>
+    </form>
+</main>
+
+<footer class="footer">笔记工坊 Note-Workshop · 辅助深度思考，而不是代替思考</footer>
+<div id="toast" class="toast"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/page-profile.js"></script>
+</body>
+</html>
